@@ -12,3 +12,5 @@ CONFIG_ESP32P4_REV_MIN_1=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_360=y
 # The speaker amp's current peaks can dip the 3.3 V rail on a weak battery or supply
 CONFIG_ESP_BROWNOUT_DET_LVL_SEL_5=y
+# The i2s audio chip sits on these lines
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n

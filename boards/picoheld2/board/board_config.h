@@ -71,8 +71,8 @@
 #define BOARD_BTN_SW        1       /* -> BSP_BTN_HOME */
 
 #if PICOHELD2_REV == 13
-#define BOARD_BTN_SELECT    35      /* active low */
-#define BOARD_BTN_START     45      /* active HIGH, pull-down */
+#define BOARD_BTN_START     35      /* active low */
+#define BOARD_BTN_SELECT    45      /* active HIGH, pull-down */
 #else
 #define BOARD_BTN_SELECT    35      /* active low */
 #define BOARD_BTN_START     49      /* analog (ADC2), pull-down, pressed above the threshold */
