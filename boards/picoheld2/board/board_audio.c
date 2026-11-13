@@ -13,6 +13,10 @@
 #include "driver/i2s_std.h"
 #include "freertos/FreeRTOS.h"
 
+// This resets the GPIO for DAT output on the i2s peripheral, because
+// it get's de-configured by something (needs further investigation)
+#define I2S_PIN_WA
+
 #ifdef I2S_PIN_WA
 #include "esp_rom_gpio.h"
 #include "soc/i2s_periph.h"
@@ -86,29 +90,37 @@ size_t bsp_audio_write(const int16_t *stereo, size_t frames, uint32_t timeout_ms
     }
 #endif
 
-    int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
-    int16_t buf[CHUNK_FRAMES * 2];
-    int gain = s_gain;
-    size_t done = 0;
+  int gain = s_gain;
+  
+  if (gain < 256) {
+      int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
+      int16_t buf[CHUNK_FRAMES * 2];
+      size_t done = 0;
 
-    while (done < frames) {
-        size_t n = frames - done;
-        if (n > CHUNK_FRAMES) n = CHUNK_FRAMES;
-        const int16_t *src = stereo + done * 2;
-        if (gain >= 256) {
-            for (size_t i = 0; i < n * 2; i++) buf[i] = src[i];
-        } else {
-            for (size_t i = 0; i < n * 2; i++) buf[i] = (int16_t)((src[i] * gain) >> 8);
-        }
+      while (done < frames) {
+          size_t n = frames - done;
+          if (n > CHUNK_FRAMES) n = CHUNK_FRAMES;
+          const int16_t *src = stereo + done * 2;
+          if (gain >= 256) {
+              for (size_t i = 0; i < n * 2; i++) buf[i] = src[i];
+          } else {
+              for (size_t i = 0; i < n * 2; i++) buf[i] = (int16_t)((src[i] * gain) >> 8);
+          }
 
-        int64_t left_us = deadline - esp_timer_get_time();
-        uint32_t wait_ms = left_us > 0 ? (uint32_t)(left_us / 1000) : 0;
-        size_t written = 0;
-        i2s_channel_write(s_tx, buf, n * 4, &written, pdMS_TO_TICKS(wait_ms));
-        done += written / 4;
-        if (written < n * 4) break;     /* timed out */
-    }
-    return done;
+          int64_t left_us = deadline - esp_timer_get_time();
+          uint32_t wait_ms = left_us > 0 ? (uint32_t)(left_us / 1000) : 0;
+          size_t written = 0;
+          i2s_channel_write(s_tx, buf, n * 4, &written, pdMS_TO_TICKS(wait_ms));
+          done += written / 4;
+          if (written < n * 4) break;     /* timed out */
+      }
+      return done;
+  } else {
+      size_t written = 0;
+      i2s_channel_write(s_tx, stereo, frames * 4, &written, pdMS_TO_TICKS(timeout_ms));
+      return written;
+  }
+   
 }
 
 void bsp_audio_volume(int percent)

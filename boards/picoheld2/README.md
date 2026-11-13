@@ -1,28 +1,30 @@
 # Pico Held 2
 
-ESP32-P4 handheld, 720x720 MIPI-DSI panel (HD395003C30, mounted rotated 90 deg clockwise), I2S DAC with
-built-in amplifier, SD card on SDMMC, GPIO buttons, battery sense. No touch, RTC or Wi-Fi radio.
+![Pico Held 2 handheld](images/image01.jpg)
 
-One board package for both revisions (v1.3 and v1.4). They differ only in the Start/Select buttons.
+Pico Held 2 is an open-source DIY ESP32-P4 handheld with a 720×720 MIPI-DSI display, an I2S DAC with a built-in amplifier, an SD card connected over SDMMC, GPIO buttons, and battery-level sensing.
 
-| Revision | Start | Select | `PICOHELD2_REV` |
-|----------|-------|--------|-----------------|
-| v1.3     | GPIO35, active low | GPIO45, active high | 13 |
-| v1.4     | GPIO49, analog (ADC2, above 3500) | GPIO35, active low | 14 (default) |
+You can find all the details [here](https://github.com/fcipaq/picoheld2).
+
+It has a d-pad as well as an analog stick and features 4 buttons (ABXY) plus L/R shoulder buttons and START/SELECT.
+
+The device does **not** include touch input, an RTC, or a Wi-Fi radio.
 
 ## Building
 
-```
+To build and flash:
+
+```sh
 cd launcher
-idf.py -B build_picoheld2_v14 -DLX_BOARD=picoheld2 -DPICOHELD2_REV=14 -p COM10 build flash
-idf.py -B build_picoheld2_v13 -DLX_BOARD=picoheld2 -DPICOHELD2_REV=13 -p COM10 build flash
+idf.py -B build_picoheld2 -DLX_BOARD=picoheld2 -p COM10 build flash
 ```
 
-Or edit the default in `board/board_config.h` (`#define PICOHELD2_REV`). Use a separate build folder per
-revision, or run `reconfigure` when you switch.
+## Features not yet exposed in `bsp.h`
 
-If the picture comes out upside down, build with `-DPICOHELD2_LCD_ROT=270`.
+The following hardware features are present but are not yet exposed through `bsp.h`:
 
-## Not exposed by bsp.h yet
-
-Analog stick (GPIO16/17), VEXT sense (GPIO18), charger status (GPIO53), SD card detect (GPIO47).
+- Analog stick: GPIO16 and GPIO17
+- Proper support for the START key since it needs ADC readings
+- VEXT sense: GPIO18 (detects external power source)
+- Charger status: GPIO53
+- SD card detect: GPIO47

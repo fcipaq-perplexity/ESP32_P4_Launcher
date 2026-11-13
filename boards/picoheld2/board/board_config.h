@@ -11,14 +11,14 @@
 #pragma once
 
 #ifndef PICOHELD2_REV
-#define PICOHELD2_REV 13        /* 13 = Pico Held 2 v1.3, 14 = v1.4 (released) */
+#define PICOHELD2_REV 14        /* 13 = Pico Held 2 v1.3, 14 = v1.4 (released) */
 #endif
 #if PICOHELD2_REV != 13 && PICOHELD2_REV != 14
 #error "PICOHELD2_REV must be 13 or 14"
 #endif
 
 #if PICOHELD2_REV == 13
-#define BOARD_NAME "Pico Held 2 v1.3 (720x720)"
+#define BOARD_NAME "Pico Held 2 v1.3 (720x720)"  // non-public prototype
 #else
 #define BOARD_NAME "Pico Held 2 v1.4 (720x720)"
 #endif
