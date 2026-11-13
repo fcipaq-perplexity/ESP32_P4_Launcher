@@ -13,6 +13,11 @@
 #include "driver/i2s_std.h"
 #include "freertos/FreeRTOS.h"
 
+#ifdef I2S_PIN_WA
+#include "esp_rom_gpio.h"
+#include "soc/i2s_periph.h"
+#endif
+
 static const char *TAG = "audio";
 
 #define CHUNK_FRAMES 256
@@ -64,6 +69,22 @@ int bsp_audio_rate(void)
 size_t bsp_audio_write(const int16_t *stereo, size_t frames, uint32_t timeout_ms)
 {
     if (!s_tx) return 0;
+
+#ifdef I2S_PIN_WA
+    /* WA: take GPIO25 back for the I2S data signal */
+    static bool dumped;
+    if (!dumped) {
+        dumped = true;
+        gpio_dump_io_configuration(stdout, 1ULL << BOARD_I2S_DOUT);   /* state as found */
+        
+        esp_rom_gpio_pad_select_gpio(BOARD_I2S_DOUT);                     /* IO MUX function back to GPIO */
+        gpio_pullup_dis(BOARD_I2S_DOUT);
+        gpio_pulldown_dis(BOARD_I2S_DOUT);
+        gpio_set_direction(BOARD_I2S_DOUT, GPIO_MODE_OUTPUT);
+        esp_rom_gpio_connect_out_signal(BOARD_I2S_DOUT, i2s_periph_signal[I2S_NUM_0].data_out_sig, false, false);
+        gpio_dump_io_configuration(stdout, 1ULL << BOARD_I2S_DOUT);   /* state as found */
+    }
+#endif
 
     int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
     int16_t buf[CHUNK_FRAMES * 2];
