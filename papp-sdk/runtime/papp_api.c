@@ -6,14 +6,16 @@
 
 __attribute__((section(".papp_imports"), used))
 papp_import_t __papp_imports[] = {
-    { PAPP_IF_SYS, 1, PAPP_IMPORT_REQUIRED, 0 },     /* v2 only for papp_local_time */
-    { PAPP_IF_MEM, PAPP_IF_MEM_VER, PAPP_IMPORT_REQUIRED, 0 },
+    { PAPP_IF_SYS, 1, PAPP_IMPORT_REQUIRED, 0 },     /* v2 for papp_local_time, v3 for papp_utc_time */
+    { PAPP_IF_MEM, 1, PAPP_IMPORT_REQUIRED, 0 },          /* v2 code memory checked at call */
     { PAPP_IF_FS,  PAPP_IF_FS_VER,  PAPP_IMPORT_OPTIONAL, 0 },
-    { PAPP_IF_DISP, PAPP_IF_DISP_VER, PAPP_IMPORT_OPTIONAL, 0 },
+    { PAPP_IF_DISP, 3, PAPP_IMPORT_OPTIONAL, 0 },             /* v3 present_ext; v4 blit checked at call */
     { PAPP_IF_AUDI, PAPP_IF_AUDI_VER, PAPP_IMPORT_OPTIONAL, 0 },
     { PAPP_IF_INPT, 1, PAPP_IMPORT_OPTIONAL, 0 },          /* v2 functions checked at call */
     { PAPP_IF_THRD, PAPP_IF_THRD_VER, PAPP_IMPORT_OPTIONAL, 0 },
     { PAPP_IF_UI, 1, PAPP_IMPORT_OPTIONAL, 0 },              /* v2 functions checked at call */
+    { PAPP_IF_NET, 1, PAPP_IMPORT_OPTIONAL, 0 },             /* launcher 0.29+ */
+    { PAPP_IF_BLE, 1, PAPP_IMPORT_OPTIONAL, 0 },             /* launcher 0.29+, boards with BLE */
 };
 
 #define SYS ((const papp_if_sys_t *)__papp_imports[0].iface)
@@ -24,6 +26,8 @@ papp_import_t __papp_imports[] = {
 #define INPT ((const papp_if_inpt_t *)__papp_imports[5].iface)
 #define THRD ((const papp_if_thrd_t *)__papp_imports[6].iface)
 #define UI   ((const papp_if_ui_t *)__papp_imports[7].iface)
+#define NET  ((const papp_if_net_t *)__papp_imports[8].iface)
+#define BLE  ((const papp_if_ble_t *)__papp_imports[9].iface)
 
 const papp_if_sys_t *papp_if_sys(void) { return SYS; }
 const papp_if_mem_t *papp_if_mem(void) { return MEM; }
@@ -47,10 +51,21 @@ bool        papp_local_time(papp_datetime_t *out)
     return SYS->hdr.version >= 2 && SYS->local_time(out);
 }
 
+bool        papp_utc_time(int64_t *seconds)
+{
+    return SYS->hdr.version >= 3 && SYS->utc_time(seconds);
+}
+
 void  *papp_alloc(size_t size, uint32_t caps, size_t align) { return MEM->alloc(size, caps, align); }
 void  *papp_realloc(void *ptr, size_t size)                 { return MEM->realloc(ptr, size); }
 void   papp_free(void *ptr)                                 { MEM->free(ptr); }
 size_t papp_mem_free_size(uint32_t caps)                    { return MEM->free_size(caps); }
+void  *papp_code_alloc(size_t size)        { return MEM->hdr.version >= 2 ? MEM->code_alloc(size) : NULL; }
+void   papp_code_free(void *code)          { if (MEM->hdr.version >= 2) MEM->code_free(code); }
+int    papp_code_sync(void *code, size_t size)
+{
+    return MEM->hdr.version >= 2 ? MEM->code_sync(code, size) : PAPP_E_UNSUPPORTED;
+}
 
 const papp_if_disp_t *papp_if_disp(void) { return DISP; }
 
@@ -69,6 +84,14 @@ papp_surface_t *papp_disp_surface_create(const papp_surface_cfg_t *cfg)
 void  papp_disp_surface_destroy(papp_surface_t *s)            { DISP->surface_destroy(s); }
 void *papp_disp_lock(papp_surface_t *s, int *stride_px)       { return DISP->lock(s, stride_px); }
 int   papp_disp_present_ext(papp_surface_t *s, const void *pixels) { return DISP->present_ext(s, pixels, 0); }
+int   papp_disp_blit(papp_surface_t *s, const papp_blit_t *b)
+{
+    return DISP->hdr.version >= 4 ? DISP->blit(s, b) : PAPP_E_UNSUPPORTED;
+}
+int   papp_disp_fill(papp_surface_t *s, int x, int y, int w, int h, uint16_t color)
+{
+    return DISP->hdr.version >= 4 ? DISP->fill(s, x, y, w, h, color) : PAPP_E_UNSUPPORTED;
+}
 int   papp_disp_present(papp_surface_t *s)                    { return DISP->present(s, 0); }
 int   papp_disp_touch(papp_surface_t *s, papp_touch_point_t *pts, int max)
 {
@@ -208,3 +231,16 @@ int papp_ui_volume(void)
 {
     return UI && UI->hdr.version >= 3 ? UI->volume() : -1;
 }
+
+int papp_ui_wifi(void)
+{
+    return UI && UI->hdr.version >= 4 ? UI->wifi() : PAPP_E_UNSUPPORTED;
+}
+
+/* ── NET ────────────────────────────────────────────────────────────────── */
+
+const papp_if_net_t *papp_net(void) { return NET; }
+
+/* ── BLE ────────────────────────────────────────────────────────────────── */
+
+const papp_if_ble_t *papp_ble(void) { return BLE; }

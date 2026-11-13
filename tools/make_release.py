@@ -9,6 +9,9 @@ Every board under boards/ whose image is built at the current version goes in:
 guition_p4_43 from launcher/build/launcher.bin, any other <id> from
 launcher/build_<id>/launcher_<id>.bin (idf.py -B build_<id> -DLX_BOARD=<id> build).
 
+Each board also gets launcher_<id>_full.bin: bootloader, partition table and launcher in one
+file for a first install at address 0 (esptool or the ESP Tool web page).
+
 latest.json lists each board under "boards"; its top-level fields are guition_p4_43's,
 which is where launchers from before per-board releases look. The board reads
 releases/latest/download/latest.json, so the newest published release (not a draft
@@ -20,6 +23,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = "giltal/ESP32_P4_Launcher"
@@ -54,11 +59,35 @@ def main():
             continue
         shutil.copyfile(path, os.path.join(args.out, name))
         files.append(name)
+        full = f"launcher_{board}_full.bin"
+        # flash_args = the build's own addresses and files (bootloader, partition table, otadata, app)
+        subprocess.run([sys.executable, "-m", "esptool", "--chip", "esp32p4", "merge_bin",
+                        "-o", os.path.abspath(os.path.join(args.out, full)), "@flash_args"],
+                       cwd=os.path.dirname(path), check=True, stdout=subprocess.DEVNULL)
+        files.append(full)
         boards[board] = {
             "url": f"https://github.com/{REPO}/releases/download/{tag}/{name}",
             "size": len(data),
             "sha256": hashlib.sha256(data).hexdigest(),
         }
+        # Wi-Fi chip firmware matching this board's esp_hosted (tools/build_c6_fw.py), offered by Settings > Update
+        hosted = re.search(r'espressif/esp_hosted:\s*"?([0-9.]+)',
+                           open(os.path.join(ROOT, "boards", board, "board", "idf_component.yml")).read())
+        c6 = os.path.join(ROOT, "build", "c6_fw", f"c6_{hosted.group(1)}.bin") if hosted else ""
+        if c6 and os.path.isfile(c6):
+            c6_name = os.path.basename(c6)
+            if c6_name not in files:
+                shutil.copyfile(c6, os.path.join(args.out, c6_name))
+                files.append(c6_name)
+            c6_data = open(c6, "rb").read()
+            boards[board]["c6"] = {
+                "version": hosted.group(1),
+                "url": f"https://github.com/{REPO}/releases/download/{tag}/{c6_name}",
+                "size": len(c6_data),
+                "sha256": hashlib.sha256(c6_data).hexdigest(),
+            }
+        elif hosted and hosted.group(1).startswith("2."):
+            print(f"note: {board}: no {os.path.relpath(c6, ROOT)} (python tools/build_c6_fw.py --board {board})")
     if not boards:
         raise SystemExit("no board image built at this version")
     if FIRST not in boards:

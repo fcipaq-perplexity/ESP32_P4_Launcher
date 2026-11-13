@@ -59,12 +59,24 @@ static int ui_volume(void)
     return r;
 }
 
+static int ui_wifi(void)
+{
+    int e = lx_svc_net_hold();          /* the radio for the run, released at teardown */
+    if (e < 0) return e;
+    lx_ui_set_guard(guard_enter, guard_leave);
+    s_ui_depth++;
+    int r = lx_ui_wifi(&lx_svc_exit_flag);
+    s_ui_depth--;
+    return r < 0 && lx_svc_exit_flag ? PAPP_E_EXIT : r;
+}
+
 const papp_if_ui_t lx_if_ui = {
     .hdr = { PAPP_IF_UI, PAPP_IF_UI_VER, sizeof(papp_if_ui_t) },
     .pick_file = ui_pick_file,
     .message   = ui_message,
     .menu      = ui_menu,
     .volume    = ui_volume,
+    .wifi      = ui_wifi,
 };
 
 /* ── In-game overlay ───────────────────────────────────────────────────── */
@@ -128,8 +140,14 @@ void lx_overlay_poll(void)
     }
     heap_caps_free(game);
     if (pick == 2) s_shot_in = 2;       /* without the menu in it */
-    if (pick == 3) lx_app_stop(2000);
+    bool hold_audio_until_exit = false;
+    if (pick == 3)
+        hold_audio_until_exit = lx_app_stop(2000) == ESP_OK;
+    /* An external HOME/STOP can also dismiss this menu. In either case the
+     * app may still be writing audio while its tasks and streams are torn
+     * down, so leave the mixer held until the app-exit callback runs. */
+    if (lx_svc_exit_flag) hold_audio_until_exit = true;
     wait_release();
-    lx_audio_hold(false);
+    if (!hold_audio_until_exit) lx_audio_hold(false);
     s_ovl_open = false;
 }

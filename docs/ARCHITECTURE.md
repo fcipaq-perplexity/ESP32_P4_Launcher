@@ -242,18 +242,20 @@ function-pointer-table speed and no symbol strings on the device.
 | ID | Interface | Key functions | Notes |
 |---|---|---|---|
 | `SYS ` | System | abi/launcher version, `board_caps`, log, time_us, sleep, yield, exit, lifecycle event poll, TRNG, perf counters | always present |
-| `MEM ` | Memory | `alloc(size, caps, align)`, `realloc`, `free`, `stats` | caps are **abstract**: `FAST` (internal), `DMA`, `LARGE` (PSRAM), `EXEC` (reserved, for future dynarec) |
+| `MEM ` | Memory | `alloc(size, caps, align)`, `realloc`, `free`, `stats` | caps are **abstract**: `FAST` (internal), `DMA`, `LARGE` (PSRAM); v2 (launcher 0.29.1) `code_alloc` / `code_free` / `code_sync`: executable PSRAM for JITs (64 KB-aligned block mapped a second time with EXEC; the app writes code through the data address and runs it at the returned one after `code_sync` = cache write-back + I-cache invalidate + `fence.i`); since 0.29.2 `code_sync` also takes executable internal SRAM (the app's FAST region, e.g. a JIT's hot code buffer; older launchers return `PAPP_E_ARG`); leftover blocks are freed at exit |
 | `THRD` | Threads & sync | thread create/join/exit (stack size + location, prio class, core), mutex, recursive mutex, semaphore, queue, event flags, timers | all tracked; v1 (launcher 0.5.0) has threads, mutexes, semaphores, queues; event flags + timers to come |
 | `FS  ` | Files | open/read/write/seek/tell/close/stat/truncate, opendir/readdir, mkdir/remove/rename, `app_dir()`, `data_dir()` | sandboxed paths (§7.6) |
-| `DISP` | Display / compositor | `info()`, surface create/destroy, `lock_back_buffer`, `present(async, vsync)`, palette for 8bpp, scale mode, dirty rects, direct-native mode | §7.3 |
+| `DISP` | Display / compositor | `info()`, surface create/destroy, `lock_back_buffer`, `present(async, vsync)`, palette for 8bpp, scale mode, dirty rects, direct-native mode; v3 `present_ext` (app's own buffer; since launcher 0.29.1 copied into the surface's spare buffer); since 0.29.1 a present on a 2-buffer surface returns at once and a launcher task scales and flips while the app draws its next frame (1-buffer surfaces stay synchronous); v4 `blit` (PPA into the surface: RGB565 / ARGB8888 / A8 pictures, scaled in 1/16 steps, quarter turns, mirrors via an SRM pass into a launcher buffer, then blended with colour key and alpha) and `fill` (PPA fill) | §7.3 |
 | `GFX ` | 2D acceleration | PPA SRM (scale/rotate/mirror/convert), PPA blend (alpha, colour key), PPA fill, 2D-DMA copy, async + sync | generalises `sprite_blit` / `fb_copy` |
 | `IMG ` | Image codecs | PNG decode, **HW JPEG decode** (P4 has a JPEG codec) to a chosen format | no colour-order hacks; returns real RGB565 |
 | `AUDI` | Audio | stream open (rate, channels, format, latency), write/push, pull callback, pause, `get_queued` | launcher mixes + resamples |
 | `INPT` | Input | gamepad state (player N, standard layout + analog axes + triggers), keyboard state, event queue (key/text/button/axis/touch/mouse/device-added), rumble (reserved) | §7.5 |
 | `KV  ` | Settings | per-app key/value (int, string, blob); read-only global prefs (volume, brightness, language) | replaces NVS-path hacks |
-| `UI  ` | Launcher dialogs | **file picker** (extension filter, start dir), message box, on-screen keyboard, progress, toast | rendered by the launcher on the overlay layer |
+| `UI  ` | Launcher dialogs | **file picker** (extension filter, start dir), message box, menu, volume, **Wi-Fi picker** (v4: the network chosen becomes the board's saved one; the app never sees the password), on-screen keyboard, progress, toast | rendered by the launcher on the overlay layer |
 | `PWR ` | Power / board | battery %, charging, backlight, LED | optional |
-| `NET `, `BTHD`, `USBD`, `CAM ` | Reserved | Wi-Fi via esp_hosted, BLE HID, USB device/MSC, MIPI-CSI camera | later phases |
+| `NET ` | Network | Wi-Fi (up with the saved network, info, scan, join for the run, SoftAP, events), DNS, TCP/UDP sockets with poll, TLS client, HTTP/1.1 client | v1 (launcher 0.29); the first call keeps Wi-Fi on for the run; `docs/NET_BLE_PROPOSAL.md` |
+| `BLE ` | Bluetooth LE | scan, connect, GATT client (discover, read, write, subscribe), GATT server (one table, values kept by the launcher, notify/indicate), advertising, events | v1 (launcher 0.29), Guition boards and Tab5; NimBLE runs only during the app's run; `docs/NET_BLE_PROPOSAL.md` |
+| `BTHD`, `USBD`, `CAM ` | Reserved | BLE HID, USB device/MSC, MIPI-CSI camera | later phases |
 
 ---
 

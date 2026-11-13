@@ -114,10 +114,17 @@ class DevLink:
         self.ser.port = port
         self.ser.baudrate = 115200
         self.ser.timeout = 0.05
-        # Don't toggle DTR/RTS on open: on USB-Serial-JTAG that can reset the chip.
-        self.ser.dtr = False
-        self.ser.rts = False
-        self.ser.open()
+        # Don't toggle DTR/RTS on open: on USB-Serial-JTAG RTS high with DTR low resets the chip.
+        if os.name == "nt":
+            self.ser.dtr = False
+            self.ser.rts = False
+            self.ser.open()
+        else:
+            # Linux/macOS raise both lines on open; pyserial would then drop DTR before RTS
+            # (a reset). Keep both high through open, then drop RTS first.
+            self.ser.open()
+            self.ser.rts = False
+            self.ser.dtr = False
         self.on_log = on_log or (lambda app, text: None)
         self.on_event = on_event or (lambda ev: None)
         self.seq = 0
@@ -410,6 +417,25 @@ def app_remote_path(dl, name):
     return f"/sd/apps/{name}/{name}.papp"
 
 
+FOLDER_ICONS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", "common", "icons")
+
+
+def put_folder_icon(dl, remote):
+    """An app deployed into a home screen folder (/sd/apps/<folder>/<dir>/...): give the folder
+    its icon (apps/common/icons/folder_<folder>.png) if it has none, as the starter card does"""
+    parts = remote.split("/")                      # "", "sd", "apps", folder, dir, file
+    if len(parts) != 6 or parts[:3] != ["", "sd", "apps"]:
+        return
+    folder = parts[3]
+    icon = os.path.join(FOLDER_ICONS, f"folder_{folder.lower().replace(' ', '_')}.png")
+    if not os.path.isfile(icon):
+        return
+    entries = json.loads(dl.request(LS, f"/sd/apps/{folder}".encode()).decode().split("\n#")[0])
+    if not any(e["n"] == "icon.png" and not e["d"] for e in entries):
+        dl.put(icon, f"/sd/apps/{folder}/icon.png")
+        print(f"folder icon -> /sd/apps/{folder}/icon.png", file=sys.stderr)
+
+
 def cmd_deploy(dl, args, exit_box):
     name = os.path.splitext(os.path.basename(args.file))[0]
     remote = args.dest or app_remote_path(dl, name)
@@ -422,6 +448,7 @@ def cmd_deploy(dl, args, exit_box):
     icon = os.path.join(os.path.dirname(os.path.abspath(args.file)), "icon.png")
     if os.path.isfile(icon):                       # home screen icon (papp_build copies it here)
         dl.put(icon, remote.rsplit("/", 1)[0] + "/icon.png")
+    put_folder_icon(dl, remote)
 
     done = threading.Event()
 

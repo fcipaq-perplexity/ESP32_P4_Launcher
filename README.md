@@ -1,4 +1,4 @@
-# ESP32-P4 Launcher
+# ESP32-P4 Launcher [![Discord Chat](https://img.shields.io/discord/1562983535898533920.svg)](https://discord.gg/nf5tPjMbUY)
 
 **Run applications from an SD card on an ESP32-P4, the way a PC runs a program from a disk.**
 
@@ -6,18 +6,21 @@ The launcher is a permanent firmware that stays in flash. Applications are `.pap
 Pick one and it is loaded into PSRAM, relocated, linked to the launcher's services and started.
 There's no reflashing, no reboot and no flash wear. When it exits, every resource it used is reclaimed.
 
-21 applications run this way today, including NES through Neo Geo emulators, Doom, Quake,
+22 applications run this way today, including NES through Game Boy Advance and Neo Geo emulators, Doom, Quake,
 Duke Nukem 3D and OpenTyrian, plus Clock and Files.
 
 The same launcher runs on more than one board, and the same `.papp` files and SD card work on all of them:
 today the Guition ESP32-P4 4.3" (800×480), the Guition JC1060P470C 7" (1024×600) and the
 M5Stack Tab5 (1280×720).
 
+**Try it without installing anything:** flash your board from the browser with Espressif's ESP Tool page,
+copy the `SDcard` folder to a card and get the apps from the Store, see [Getting started](#getting-started).
+
 ![Home screen: the Emulators folder on the 7-inch board](docs/images/home.png)
 
 | Launcher version | App ABI | Toolchain | Boards |
 |---|---|---|---|
-| 0.25.2 | 2.0-preview | ESP-IDF v5.5.2 | Guition ESP32-P4 4.3" (480×800), Guition JC1060P470C 7" (1024×600), M5Stack Tab5 (720×1280) |
+| 0.29.4 | 2.0-preview | ESP-IDF v5.5.6 | Guition ESP32-P4 4.3" (480×800; chip v1.x, or v3.x with its own image), Guition JC1060P470C 7" (1024×600), M5Stack Tab5 (720×1280), Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (320×480, contributed), Waveshare ESP32-P4 dev kit + Raspberry Pi DSI display (800×480, contributed) |
 
 > **Status: active development.** The ABI is a preview and may still change. Everything below describes
 > what exists in the code today; the plan for what comes next is in [docs/WORKPLAN.md](docs/WORKPLAN.md).
@@ -51,9 +54,11 @@ ones come from the 7" board, the 800×480 ones from the 4.3" board.
 | | |
 |---|---|
 | ![Home screen with folders](docs/images/folders.png) | ![Games folder](docs/images/games.png) |
-| **Home screen:** folders with their own icons, clock, SD card and settings | **Games folder:** Doom, Duke Nukem 3D, OpenTyrian and Quake |
+| **Home screen:** the Store, folders with their own icons, clock, SD card and settings | **Games folder:** Doom, Duke Nukem 3D, OpenTyrian and Quake |
+| ![Store](docs/images/store.png) | ![An app in the Store](docs/images/community.png) |
+| **Store:** apps by category, with Get, Update and Installed | **An app's page:** install, update, open or remove it |
 | ![Settings](docs/images/settings.png) | ![Date and time](docs/images/date_time.png) |
-| **Settings:** volume, brightness, developer apps, controller mapping, Wi-Fi, update, the app catalogue and system information | **Date and time:** on boards with a real-time clock, the home screen clock opens it |
+| **Settings:** volume, brightness, developer apps, controller mapping, Wi-Fi, update and system information | **Date and time:** on boards with a real-time clock, the home screen clock opens it |
 | ![Paused](docs/images/pause_menu.png) | ![Content browser](docs/images/browser.png) |
 | **HOME** pauses any game under the launcher's menu | **Content browser:** All, Favorites and Recent tabs, with live search. Every emulator gets it from the launcher |
 | ![Game menu](docs/images/game_menu.png) | ![Volume overlay](docs/images/volume.png) |
@@ -96,7 +101,7 @@ Think of a `.papp` as a **DLL with a `main()`**:
 ┌──────────────────────────────────────────────────────────────┐
 │  PAPP apps (.papp on SD)   emulators · games · your code     │
 │  app code + SDK runtime (crt0, libc glue, interface stubs)   │
-├───────────────  ABI: SYS MEM FS DISP AUDI INPT THRD UI  ─────┤
+├──────────  ABI: SYS MEM FS DISP AUDI INPT THRD UI NET BLE  ──┤
 │  Launcher core (board-agnostic ESP-IDF app in flash)         │
 │  loader · App Manager · compositor · audio mixer ·           │
 │  input manager · content browser · DevLink · home screen     │
@@ -122,9 +127,11 @@ Two rules keep this portable: apps only see the ABI, and the launcher core only 
 - Content browser with folders, Favorites, Recent, search, and per-ROM Run/Resume/Restart/Delete save
 - DevLink: a USB protocol to upload, run, log, screenshot, inject input and read crash reports
 - Self-update from the SD card or from GitHub Releases (Settings → Update), with automatic rollback if a new
-  version doesn't start. Each board only ever installs its own launcher
-- App catalogue: Settings → Apps lists the apps published on GitHub with the installed and online version,
-  and installs or updates them over Wi-Fi (checked with SHA-256)
+  version doesn't start. Each board only ever installs its own launcher. It also updates the Wi-Fi chip
+  (ESP32-C6) firmware to the version the launcher is built for, from the release or from `/sd/update/c6.bin`
+- Store: the first tile on the home screen. Apps by category (Emulators, Games, Tools, Productivity, Education,
+  Community, Installed), each with its icon, description and version; installs, updates and removes them over
+  Wi-Fi (downloads checked with SHA-256), and the tile counts the updates waiting
 - Controllers: USB HID pads are read from their own report descriptor, Xbox 360-style (XInput) pads and receivers such as 8BitDo's work too, and any pad can be remapped in Settings
 - Wi-Fi and network time through the on-board ESP32-C6; the network is saved on the SD card (`config/wifi.txt`)
 - Real-time clock on boards that have one: the time survives power-off, and the home screen clock opens a
@@ -147,7 +154,8 @@ Two rules keep this portable: apps only see the ABI, and the launcher core only 
 | Atari 800 / XL / 5200 | atari800 | ZX Spectrum | spectemu |
 | Doom | prboom | Quake | WinQuake |
 | Duke Nukem 3D | Chocolate Duke3D | OpenTyrian | OpenTyrian |
-| Clock (clock, stopwatch, timer) | This project | Files (browse, preview, delete) | This project |
+| Game Boy Advance | gpSP ([RISC-V JIT](https://github.com/midworld/gpsp)) | | |
+| Clock (clock, alarms, stopwatch, timer, world clock) | This project | Files (browse, preview, delete) | This project |
 
 The test apps (`hello`, `gfx_demo`, `audio_test`, `input_test`, `thread_test`, `fast_bench`, `browse_test`,
 `libc_test`) are hidden unless you turn on **Settings → Show developer apps**.
@@ -160,7 +168,7 @@ Three boards are supported. All run the same apps from the same SD card. Adding 
 | Part | Guition ESP32-P4 4.3" | Guition JC1060P470C 7" | M5Stack Tab5 |
 |---|---|---|---|
 | Board id (`-DLX_BOARD=`) | `guition_p4_43` (default) | `guition_p4_7` | `m5stack_tab5` |
-| SoC | ESP32-P4, dual RISC-V at 360 MHz, chip revision v1.x | same | same |
+| SoC | ESP32-P4, dual RISC-V at 360 MHz, chip revision v1.x (v3.x: board id `guition_p4_43_v3`) | same | same |
 | Memory | 32 MB hex PSRAM at 200 MHz, 16 MB flash | same | same |
 | Display | 480×800 ST7701 MIPI-DSI, used in landscape as 800×480 | 1024×600 JD9165 MIPI-DSI, landscape | 720×1280 MIPI-DSI (ILI9881C, ST7123 or ST7121, detected at start), used in landscape as 1280×720 |
 | Touch | GT911 capacitive | GT911 capacitive | GT911, or the touch built into the ST7123 / ST7121 panel |
@@ -170,41 +178,93 @@ Three boards are supported. All run the same apps from the same SD card. Adding 
 | Storage | microSD | microSD | microSD |
 | Input | USB host for gamepads and keyboards, optional GPIO button pad, battery pin | USB host for gamepads and keyboards | USB host for gamepads and keyboards |
 
+Contributed, tested by their authors: the Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (`waveshare_p4_35`), and the
+Waveshare ESP32-P4 Module dev kit with a Raspberry Pi Touch Display (V1) or a compatible one, tested with a
+Cuqi 5" (`waveshare_p4_rpi_dsi`: 800×480 at about 47 Hz, FT5x06 touch, ES8311, no real-time clock; USB
+gamepads on the lower USB-A port only; notes in [docs/PORT_WAVESHARE_P4.md](docs/PORT_WAVESHARE_P4.md)).
+
 ## Getting started
 
-### 1. Install the tools
+To use the launcher you only need to flash it once, from a web browser, and prepare an SD card. Building from
+source is optional.
 
-- [ESP-IDF v5.5.2](https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32p4/get-started/index.html): use this
+### 1. Flash the launcher from your browser
+
+You need Chrome or Edge on a desktop computer (the page uses Web Serial, which Firefox and Safari don't
+have) and a USB cable for the board's USB-Serial-JTAG port.
+
+1. Download your board's full image from the [latest release](https://github.com/giltal/ESP32_P4_Launcher/releases/latest):
+
+   | Board | File |
+   |---|---|
+   | Guition ESP32-P4 4.3" | `launcher_guition_p4_43_full.bin` |
+   | Guition ESP32-P4 4.3" with a v3.x chip (see below) | `launcher_guition_p4_43_v3_full.bin` |
+   | Guition JC1060P470C 7" | `launcher_guition_p4_7_full.bin` |
+   | M5Stack Tab5 | `launcher_m5stack_tab5_full.bin` |
+   | Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 | `launcher_waveshare_p4_35_full.bin` |
+
+   A full image holds the bootloader, partition table and launcher, so it goes to address 0. The files
+   without `_full` are only the launcher, for Settings → Update.
+2. Connect the board and open Espressif's **ESP Tool** page: <https://espressif.github.io/esptool-js/>
+3. Under **Program**, click **Connect** and pick the board's port in the browser's list
+   (on Windows it shows as a USB Serial Device or USB JTAG). The log then shows the chip, ESP32-P4.
+   If it can't connect, hold the board's BOOT button, press RESET, release BOOT and try again.
+4. In the file table, change **Flash Address** from `0x1000` to **`0x0`** and choose the `_full.bin` file.
+   Leave Flash Mode, Frequency and Size as they are.
+5. Click **Program** and wait for the log to finish.
+6. Press RESET on the board, or unplug and reconnect it. The home screen appears.
+
+Then [prepare an SD card](#preparing-the-sd-card): copy the `SDcard` folder of this repository to an empty
+FAT32 or exFAT card (exFAT: launcher 0.29.4 and later), connect to Wi-Fi in Settings and install apps from the Store (step 4 below).
+
+The same in a terminal, if you have esptool:
+
+```bash
+esptool.py --chip esp32p4 -p COMx write_flash 0x0 launcher_guition_p4_43_full.bin
+```
+
+**Which 4.3" chip do I have?** Newer Guition 4.3" boards carry a rev v3.x ESP32-P4. An image runs on one
+chip generation only, so these have their own image. On the ESP Tool page, the log after **Connect**
+shows the chip revision, for example "revision v1.0" or "revision v3.2"; `esptool.py --chip esp32p4
+-p COMx chip_id` shows it too. If you flashed the wrong one, the screen stays dark: flash the other
+file. After the first install, Settings → Update picks the right image by itself.
+
+### 2. Build the launcher yourself (optional)
+
+Install the tools:
+
+- [ESP-IDF v5.5.6](https://docs.espressif.com/projects/esp-idf/en/v5.5.6/esp32p4/get-started/index.html): use this
   version. The releases are built with it, and the downloaded components (Wi-Fi driver, display drivers, LVGL)
   are pinned to the exact versions that go with it. Another ESP-IDF builds with a warning, but is not tested.
 - Python with `pyserial` and `pyelftools` (the ESP-IDF Python environment works if you add them)
 
-In PowerShell, load ESP-IDF for the session. `tools/idf_env.ps1` looks in `%USERPROFILE%\esp\v5.5.2\esp-idf`
+In PowerShell, load ESP-IDF for the session. `tools/idf_env.ps1` looks in `%USERPROFILE%\esp\v5.5.6\esp-idf`
 unless `IDF_PATH` is already set:
 
 ```powershell
 . .\tools\idf_env.ps1
 ```
 
-### 2. Build and flash the launcher
-
 Connect the board's USB-Serial-JTAG port, and use your own COM port below.
 
 ```powershell
 cd launcher
 idf.py -p COM9 build flash                                                    # Guition 4.3" (default board)
+idf.py -B build_guition_p4_43_v3 -DLX_BOARD=guition_p4_43_v3 -p COMx build flash  # Guition 4.3" with a v3.x chip
 idf.py -B build_guition_p4_7 -DLX_BOARD=guition_p4_7 -p COM10 build flash     # Guition 7"
 idf.py -B build_m5stack_tab5 -DLX_BOARD=m5stack_tab5 -p COM15 build flash     # M5Stack Tab5
+idf.py -B build_waveshare_p4_rpi_dsi -DLX_BOARD=waveshare_p4_rpi_dsi -p COMxx build flash   # Waveshare + RPi display
 cd ..
 ```
 
 Each board builds in its own folder. The boards use different versions of the ESP32-C6 driver, so when you
 switch to the other board, add `reconfigure` once: `idf.py -B <folder> -DLX_BOARD=<id> reconfigure build`.
+The 4.3" with a v3.x chip has its own board id, `guition_p4_43_v3` (same board code, built for v3 silicon).
 
 > On Windows, `papp_dev.py` needs the same COM port, so close any serial monitor first. Text logs go to
 > UART0. USB-Serial-JTAG belongs to DevLink.
 
-### 3. Build the apps
+### 3. Build the apps (optional)
 
 Apps only need the `riscv32-esp-elf` toolchain from ESP-IDF, not an ESP-IDF project.
 
@@ -217,8 +277,9 @@ Output goes to `build/apps/<name>/<name>.papp`, next to the `.elf` and `.map`.
 
 ### 4. Install an app
 
-Without building anything: connect to Wi-Fi in Settings, open Settings → Apps and choose **Install all**. Every
-published app downloads into its folder (Emulators, Games). Then add ROMs and game data, see
+Without building anything: connect to Wi-Fi in Settings, open the **Store** (the first tile on the home
+screen) and choose **Install all**. Every published app downloads into its folder (Emulators, Games). Or pick
+apps one at a time: open one and choose **Install**. Then add ROMs and game data, see
 [Preparing the SD card](#preparing-the-sd-card).
 
 To install an app you built yourself:
@@ -229,7 +290,8 @@ python tools/papp_dev.py --port COM9 deploy build/apps/doom/doom.papp --timeout 
 
 `deploy` uploads the app and its icon, runs it and streams its log. You can also copy files to the card
 directly: anything at `/sd/apps/<dir>/<file>.papp` appears on the home screen. Or, on Wi-Fi, take published
-apps from Settings → Apps (see [Versions and publishing](#versions-and-publishing)).
+apps from the Store (see [Versions and publishing](#versions-and-publishing)). The Store lists apps copied by
+hand too, under Installed, and can remove any of them.
 
 ### 5. Update the launcher later
 
@@ -239,6 +301,14 @@ The home screen offers the update, and a board refuses another board's image. A 
 to the previous version and says so.
 
 > After flashing with `idf.py flash`, the board boots the factory slot again.
+
+The Wi-Fi chip (ESP32-C6) runs its own firmware, and it works best at the version of the launcher's
+Wi-Fi library (esp_hosted). The Wi-Fi screen shows both. When they differ, Settings → Update offers
+**Update the Wi-Fi chip** after the launcher is up to date: it downloads the release's `c6_<version>.bin`
+(or takes `/sd/update/c6.bin` from the card), sends it to the chip in about 15 seconds and restarts the
+board. It only installs esp_hosted firmware for an ESP32-C6 at the launcher's version, and if anything
+fails the chip keeps its old firmware. The Guition boards support it; the Tab5 and the Waveshare
+(esp_hosted 1.4, their makers' firmware) don't. To build the image: `python tools/build_c6_fw.py`.
 
 ## Folders
 
@@ -252,16 +322,16 @@ A folder can have its own icon: put an `icon.png` (best 88x88) in its directory,
 
 ## Preparing the SD card
 
-The [`SDcard`](SDcard) folder is a ready start: copy its contents to the root of an empty FAT32 card, then on
-Wi-Fi choose Settings → Apps → **Install all**. It already holds the freely shareable game data: Tyrian 2.1
+The [`SDcard`](SDcard) folder is a ready start: copy its contents to the root of an empty FAT32 or exFAT card, then on
+Wi-Fi open the **Store** and choose **Install all**. It already holds the freely shareable game data: Tyrian 2.1
 (freeware), the Doom and Quake shareware episodes and gngeo's data file. It also has the controller database and
 an empty folder for each system's ROMs. Its [README](SDcard/README.md) explains each folder.
 
 ```
 /sd
-├── apps/<name>/<name>.papp     applications (Settings → Apps puts them here)
+├── apps/<name>/<name>.papp     applications (the Store puts them here)
 ├── apps/<name>/icon.png        optional icon (square, best at 88×88, transparency OK)
-├── config/gamepads.txt         controller mappings shared by everyone (updated by Settings → Apps)
+├── config/gamepads.txt         controller mappings shared by everyone (updated by the Store)
 ├── config/gamepads_mine.txt    your own mappings (Settings → Map controller)
 ├── config/wifi.txt             your Wi-Fi network (Settings → Wi-Fi, or write it yourself)
 ├── roms/<system>/              ROMs and game data (table below)
@@ -277,6 +347,7 @@ No ROMs, BIOS files or commercial game data are included. You need to supply you
 | OpenTyrian | the contents of the Tyrian 2.1 folder (`tyrian1.lvl`, `music.mus`, `*.shp`, ...) to `/sd/tyrian/data/` | Tyrian 2.1, [freeware](https://camanis.net/tyrian/tyrian21.zip) and the data OpenTyrian itself uses |
 | Quake | `id1/pak0.pak` to `/sd/roms/quake/id1/` | `pak0.pak`, the shareware episode |
 | Duke Nukem 3D | `DUKE3D.GRP` to `/sd/roms/duke3d/duke3d.grp` | not included (commercial); tested with the Atomic Edition file |
+| Game Boy Advance | the games to `/sd/roms/gba/`; optional BIOS `gba_bios.bin` there (a built-in replacement runs most games) | not included |
 | Neo Geo | `neogeo.zip` (BIOS) and the games to `/sd/roms/neogeo/` | `gngeo_data.zip`, the emulator's own data; the BIOS is not included |
 
 Doom's `prboom.wad` is built into the app; you don't need to copy it.
@@ -292,7 +363,7 @@ Doom's `prboom.wad` is built into the app; you don't need to copy it.
 | Genesis | `/sd/roms/gen` | SNES | `/sd/roms/snes` |
 | Neo Geo | `/sd/roms/neogeo` | Doom | `/sd/roms/doom/doom.wad` |
 | Quake | `/sd/roms/quake/id1/pak0.pak` | Duke Nukem 3D | `/sd/roms/duke3d/duke3d.grp` |
-| OpenTyrian | `/sd/tyrian/data` | | |
+| OpenTyrian | `/sd/tyrian/data` | Game Boy Advance | `/sd/roms/gba` |
 
 ## Controls
 
@@ -329,7 +400,7 @@ controller**. Mappings are text on the card, one line per controller model (USB 
 Each `<button the pad reports>=<button it should be>` pair lists a button that differs; `-` ignores one. The
 launcher reads `/sd/config/gamepads_mine.txt` (yours, written by Map controller), then `/sd/config/gamepads.txt`
 (the shared database). **Share a mapping:** add its line to [`SDcard/config/gamepads.txt`](SDcard/config/gamepads.txt)
-in a pull request. Settings → Apps downloads the newest database together with the app list, so the next
+in a pull request. The Store downloads the newest database together with the app list, so the next
 owner of that pad doesn't need to map it. Mappings made with a launcher before 0.23 (kept in the board's flash)
 still work and are copied to your file the first time the pad connects.
 
@@ -434,8 +505,12 @@ python tools/make_apps_release.py --publish     # needs the GitHub CLI, logged i
 ```
 
 This uploads every app that isn't a developer app, with its icon and `apps.json`, to the repository's `apps`
-release (a pre-release, so it never replaces the launcher's own latest release). Settings → Apps on a board
-then offers **Update** for each app whose online version is newer than the one on its card. An app is
+release (a pre-release, so it never replaces the launcher's own latest release). It publishes only from an
+up-to-date checkout: `community/`, `apps/store.json` and the controller list must match `origin/main` with nothing
+uncommitted, and no app already in the Store may disappear or go back to an older version (`--force` overrides). The Store on a board then
+offers **Update** for each app whose online version is newer than the one on its card, and its tile shows how
+many there are. Each app's category and one-line description come from [`apps/store.json`](apps/store.json)
+(the release script stops when an app is missing there). An app is
 updated where it is, even if it was moved into a folder; a new app goes to the folder named in the catalogue
 (emulators to Emulators, games to Games). To try a catalogue from your own server first, build it with
 `--base http://<server>/` and put that `apps.json` address in `/sd/update/apps_url.txt`.
@@ -464,10 +539,10 @@ PAPP_FAST_BSS  static uint16_t line[320];
 ## Sharing your app
 
 You can share an app you built without sharing its source: send the `.papp` in a pull request. Once it is
-merged, it appears in **Settings → Apps** under **Community** with your name, and installs into the Community
+merged, it appears in the **Store** under **Community** (and under its category) with your name, and installs into the Community
 folder on the home screen (there from launcher 0.25.1 on, empty until you install one). Updates reach users the same way as the project's apps.
 
-![Settings → Apps with a community app at the end of the list](docs/images/community.png)
+![The Store's Community category](docs/images/community.png)
 
 **What to send.** One folder per app under [`community/`](community), named like the app in lowercase:
 
@@ -475,14 +550,15 @@ folder on the home screen (there from launcher 0.25.1 on, empty until you instal
 community/my-game/
 ├── my-game.papp       the app, at most 4 MB (larger: see below)
 ├── icon.png           square PNG, 64 to 256 pixels, 88×88 is best, transparency OK
-├── app.json           author, description, licence, optional source link
+├── app.json           author, description, category, licence, optional source link
 └── screenshot.png     optional
 ```
 
 ```json
 {
   "author": "Your name or GitHub user",
-  "description": "One line about the app, shown in Settings > Apps",
+  "description": "One line about the app, shown in the Store",
+  "category": "games",
   "license": "MIT",
   "source": "https://github.com/you/your-app"
 }
@@ -508,7 +584,7 @@ launcher checks every download against that SHA-256.
 
 **Before you install or merge one.** A PAPP is native code and runs without a sandbox: an app can do anything
 the board can, including deleting files on the card. Without the source, nobody can review what it does. So
-Settings → Apps names the author and marks community apps as not reviewed, and **Install all** never installs
+the Store names the author and marks community apps as not reviewed, and **Install all** never installs
 them; each one is the user's own choice. Merge apps from people you trust.
 
 **Licences.** An app built on GPL code, such as most emulator cores, can't be shared as a binary alone. Its
@@ -521,7 +597,7 @@ Include only `papp/papp.h`. The full API, with examples, is in
 
 | Interface | Version | What it gives you | Example calls |
 |---|---|---|---|
-| `SYS` | 2 | Logging, time, local time, exit, board id | `papp_log`, `papp_time_us`, `papp_local_time`, `papp_exit` |
+| `SYS` | 3 | Logging, time, local time, UTC time, exit, board id | `papp_log`, `papp_time_us`, `papp_local_time`, `papp_utc_time`, `papp_exit` |
 | `MEM` | 1 | Tracked allocation from PSRAM, internal or DMA memory | `papp_alloc`, `papp_free` |
 | `FS` | 1 | Files, also reachable through stdio with `--libc` | `papp_fs()` |
 | `DISP` | 3 | Surfaces, scaling, tear-free present, zero-copy present, touch | `papp_disp_surface_create`, `papp_disp_present`, `papp_disp_present_ext` |
@@ -638,11 +714,12 @@ second of real time. Quake's figure comes from its own `timedemo demo1`.
 | Genesis | ~54 fps | 6 in 20 s | Emulates at 60, skips some frames when drawing |
 | SNES | ~35 fps | 8 in 20 s | Emulates at 60, skips frames when drawing |
 | Neo Geo | ~32 fps | not measured | Metal Slug, about 11 s to load |
+| Game Boy Advance | 37–60 fps (game at 60) | low | Launcher 0.29.1, 7": Golden Sun, Super Mario World, Kirby 60; Zelda Minish Cap 53; Castlevania Aria 47; Mario Kart 37 drawn, skipping frames to keep the game and sound at full speed. Needs 0.29.1 for the JIT |
 | Duke Nukem 3D | ~41 fps in E1L1, 52 in menus | low | Software renderer |
 | Doom | ~33 fps | 0 | Software renderer |
 | Quake | ~20 fps | 1 | `timedemo demo1`, software renderer |
 
-Each present costs about 5 ms of PPA time. Frames go to the PPA without a copy (`present_ext`).
+Each present costs about 5 ms of PPA time (7 ms for GBA on the 7"); since launcher 0.29.1 the PPA works while the app runs its next frame.
 
 SD reads reach about 11.5 MB/s through the launcher's file service. Every open file gets a 16 KB DMA-aligned
 buffer, because reads into an unaligned buffer fall back to one sector at a time, at about 1.5 MB/s.
@@ -669,7 +746,10 @@ rebuilt. [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) is the checklist from th
 
 ```
 launcher/              ESP-IDF project: main.c + home.c (LVGL home screen)
-boards/<id>/           board packages: guition_p4_43 (4.3"), guition_p4_7 (7"), m5stack_tab5
+boards/<id>/           board packages: guition_p4_43 (4.3"), guition_p4_43_v3 (the 4.3" with a v3.x chip),
+                       guition_p4_7 (7"), m5stack_tab5,
+                       waveshare_p4_35 (Waveshare 3.5" SPI, needs ESP-IDF >= 5.5.5),
+                       waveshare_p4_rpi_dsi (Waveshare dev kit + RPi DSI display)
 components/
   bsp/                 BSP contract (bsp.h)
   papp_abi/            .papp format and interface definitions
@@ -694,8 +774,9 @@ apps/                  emulators, games and test apps
   common/v1compat/     PAPP v1 compatibility layer
   common/icons/        emulator and folder icons
 tools/papp_dev.py      DevLink host tool
+tools/build_c6_fw.py   Wi-Fi chip (ESP32-C6) firmware matching the launcher's esp_hosted
 tools/make_release.py  release files for Settings → Update, every board
-tools/make_apps_release.py  app catalogue, community apps and controller database for Settings → Apps
+tools/make_apps_release.py  app catalogue, community apps and controller database for the Store
 tools/community.py     checks the community apps (the pull request check runs it)
 community/             apps shared without their source, one folder each
 SDcard/                starter card: shareable game data, controller database, ROM folders
@@ -729,7 +810,8 @@ Further reading:
 ## Credits and licensing
 
 This project grew out of [RetroESP32-P4](https://github.com/giltal/RetroESP32-P4), the reference for its drivers
-and ports. The launcher UI uses [LVGL](https://lvgl.io).
+and ports. The launcher UI uses [LVGL](https://lvgl.io). The Clock's text is drawn with
+[Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License 1.1), rendered by `apps/clock/make_font.py`.
 
 This project's original code (launcher, SDK, tools, compatibility layers and board support) is released under
 the [MIT License](LICENSE).

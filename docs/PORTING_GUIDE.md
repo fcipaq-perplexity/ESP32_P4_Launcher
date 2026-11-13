@@ -6,7 +6,9 @@ change: they ask for the display size, draw into their own surface, and the comp
 rotates it onto the panel. The same SD card runs on every board.
 
 Written from the second and third ports, the Guition JC1060P470C (7" 1024x600, `boards/guition_p4_7`)
-and the M5Stack Tab5 (720x1280, `boards/m5stack_tab5`), each done in an afternoon.
+and the M5Stack Tab5 (720x1280, `boards/m5stack_tab5`), each done in an afternoon. A contributed one, the Waveshare
+dev kit with a Raspberry Pi DSI touch display (`boards/waveshare_p4_rpi_dsi`), has its own notes in
+`docs/PORT_WAVESHARE_P4.md`: a panel that can't take RGB565, and a refresh rate below 50 Hz.
 
 ## 1. The board package
 
@@ -39,12 +41,16 @@ Start by copying the closest existing board. What each function must do is writt
    for the 4.3" portrait panel).
 3. **Display.** Two framebuffers, `bsp_display_show()` switches scan-out at the next refresh,
    `bsp_display_wait_flip()` waits for it. Clear both buffers before the backlight comes on.
+   The framebuffers are RGB565. A panel that needs another format (the Waveshare 5" bridge takes
+   only RGB888) keeps RGB565 shadow buffers and converts each frame in `bsp_display_show()` with the
+   PPA; the blend engine is about twice as fast as the scaler (SRM) for this.
 4. **Touch.** Report landscape coordinates scaled to the panel. The GT911 reports its own configured
    range (800x480 on the 7" board), so scale from that, not from the panel size. On the 7" board an
    I2C probe right after the panel reset upsets the GT911: talk to its addresses directly.
 5. **Audio.** One fixed rate (48 kHz). The launcher's mixer resamples every app stream to it.
 6. **Wi-Fi companion.** `esp_hosted` must suit the firmware on the board's ESP32-C6, so its version is
-   pinned in the board's `idf_component.yml`: 2.0 on the 4.3", 2.12 on the 7" (its C6 reports 2.3), and
+   pinned in the board's `idf_component.yml`: 2.12 on the Guition 4.3" and 7" (they shipped with C6 firmware
+   2.0 and 2.3; a 2.12 launcher talks to both, and Settings → Update moves the C6 to 2.12.13), and
    1.4 with `esp_wifi_remote` 0.8.5 on the Tab5, as in M5Stack's demo (2.12 never got past SDIO card
    init there). `lx_net` only asks for `esp_wifi_remote` without a version. SDIO pins other than the
    P4 slot 1 defaults are set in `sdkconfig.board`; check the build log line `sdio_wrapper: GPIOs: ...`,
@@ -76,6 +82,8 @@ another board's launcher, from the SD card or online.
 ## 4. Test
 
 1. `python tools/papp_dev.py --port COMxx info` shows the board id, display size and capabilities.
+   On Linux and macOS the port is `/dev/ttyACM*`; a board with a separate UART bridge (CH343) shows
+   two, and DevLink is the USB-Serial-JTAG one.
    `bootlog` shows everything logged before DevLink came up: the place to look when a device doesn't start.
 2. `shot` screenshots the home screen: check the layout uses the whole display.
 3. Put the SD card from another board in, unchanged. Run apps of each kind: an emulator (NES), a v1
@@ -87,7 +95,8 @@ another board's launcher, from the SD card or online.
 ## 5. Releases
 
 `python tools/make_release.py` packs every board built at the current version into one release:
-`latest.json` lists each under `"boards"`, and its top-level fields are `guition_p4_43`'s, where
+`launcher_<id>_full.bin` beside each image is the first install (bootloader, partition table and launcher,
+flashed at 0 from the ESP Tool web page or esptool). `latest.json` lists each under `"boards"`, and its top-level fields are `guition_p4_43`'s, where
 launchers from before per-board releases look. A board with no entry is told there is no release for
 it yet.
 
@@ -99,7 +108,7 @@ it yet.
 | Panel reset | GPIO 5 | GPIO 27 (V1 panel), GPIO 0 (2026 V2 panel: needs the other init table) |
 | Backlight | on/off | PWM |
 | Audio | ES8311, amplifier on GPIO 11 | ES8311, NS4150 amplifier on GPIO 20 |
-| C6 firmware | esp_hosted 2.0.17 | esp_hosted 2.3.0 (host 2.12 works, with a version warning) |
+| C6 firmware | shipped with esp_hosted 2.0.17; the launcher updates it to 2.12.13 | shipped with 2.3.x; updated to 2.12.13 |
 | Extras | battery pin, GPIO pad add-on | RX8025T real-time clock (keeps UTC; set from NTP) |
 
 The M5Stack Tab5: 720x1280 portrait panel (`display_rot` 90), one of three, told apart at boot by the
@@ -108,3 +117,25 @@ firmware version register: 1 = ST7121, 3 = ST7123; init tables from M5Stack's BS
 codec, RX8130 RTC, two PI4IOE5V6408 expanders (0x43: speaker amp, LCD reset; 0x44: C6 power, USB 5 V,
 charging), C6 on SDIO CLK 12, CMD 13, D0-D3 11/10/9/8, reset 15. Its 2-cell battery (INA226 at 0x41)
 isn't reported yet.
+
+The Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (`boards/waveshare_p4_35`, pins from Waveshare's BSP
+component 2.0.2): 320x480 ST7796 on SPI (80 MHz), FT6336 touch at 0x38, ES8311 (amplifier on GPIO 53),
+SDMMC with on-chip LDO 4, C6 on the default SDIO pins (CLK 18, CMD 19, D0-D3 14-17, reset 54), esp_hosted
+1.4. The panel has its own GRAM, so the board emulates the double-buffered contract: the framebuffers are
+a 768x512 virtual screen (the home screen needs about 800x480), and a push task scales each frame by
+0.625 with the PPA and streams it to the panel through two DMA bounce buffers (byte-swapped, the panel
+is big-endian). About 30 fps at most. Touch is mapped back up to 768x512. These boards ship with
+ESP32-P4 **v3.2** silicon, which needs ESP-IDF 5.5.5 or later (Espressif advisory AR2026-004): on
+5.5.2 it boot-loops on LP_WDT resets before the bootloader prints a line.
+
+The Waveshare ESP32-P4 dev kit with a Raspberry Pi Touch Display (V1) or a copy (tested: Cuqi 5"): the same Function EV board wiring
+as the Guition 7" (I2C, ES8311, SD, C6 on SDIO), amplifier on GPIO 53. The panel is a TC358762
+DSI-to-DPI bridge on one lane, about 46.7 Hz, powered, reset and dimmed by an ATTINY88 at 0x45, with
+FT5x06 touch (mirrored in both axes). It shows RGB565 wrapped sideways, so the board converts to RGB888
+(above). No RTC, battery or buttons. USB host works only on the root port (the lower USB-A); the
+on-board hub's ports need a Transaction Translator that ESP-IDF doesn't have.
+
+A board sold with either chip generation gets one board id per generation, because an image runs on one
+only (the ROM and memory map differ, and the bootloader checks the revision range). `boards/guition_p4_43_v3`
+is the pattern: an `sdkconfig.board` with the v3 lines, and a `board/CMakeLists.txt` that builds
+`guition_p4_43`'s sources with `BOARD_CHIP_V3` defined, which `board.c` turns into the other id and name.
